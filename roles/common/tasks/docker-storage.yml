@@ -17,3 +17,10 @@
     fstype: xfs
     opts: defaults,nofail
     state: mounted
+
+
+- name: Create containerd storage directory
+  ansible.builtin.file:
+    path: /opt/containerd
+    state: directory
+    mode: "0755"
