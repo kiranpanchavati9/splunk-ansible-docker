@@ -20,7 +20,7 @@
       - SPLUNK_PASSWORD={{ splunk_admin_password }}
 
 
-- Check the status of the Heavy Forwarder container
+- name: Check the status of the Heavy Forwarder container
   community.docker.docker_container_exec:
     container: splunk-heavy-forwarder
     command: /opt/splunk/bin/splunk status
