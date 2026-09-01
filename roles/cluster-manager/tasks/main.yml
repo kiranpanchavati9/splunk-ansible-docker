@@ -1,0 +1,151 @@
+- name: Install Docker 
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: docker.yml
+
+- name: Start Splunk Cluster Manager container
+  community.docker.docker_container:
+    name: splunk-cluster-manager
+    image: splunk/splunk:latest
+    state: started
+    restart_policy: unless-stopped
+    published_ports:
+      - "8000:8000"
+      - "8089:8089"
+    env:
+      SPLUNK_START_ARGS = --accept-license
+      SPLUNK_PASSWORD = "{{ splunk_admin_password }}"
+      SPLUNK_ROLE = "splunk_cluster_manager"
+    volumes:
+      - /opt/splunk/etc/:/opt/splunk/etc
+      - /opt/splunk/var:/opt/splunk/var
+    no_log: true
+
+
+- name: Wait for the Splunk
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: 8089
+    delay: 10
+    timeout: 300
+
+
+- name: Wait until Splunk is running inside container
+  container: splunk-cluster-manager
+  community.docker.docker_container_exec:
+    command: /opt/splunk/bin/splunk status
+  register: splunk_status
+  retries: 30
+  delay: 10
+  until:
+    - splunk_status.rc == 0
+    - "'splunkd is running' in splunk_status.stdout"
+  changed_when: false
+
+
+- name: Display Splunk status
+  ansible.builtin.debug:
+    var: splunk_status.stdout_lines
+
+
+- name: Configure Cluster Manager
+  container: splunk-cluster-manager
+  community.docker.docker_container_exec:
+    command: >-
+      {{ splunk_home }}/bin/splunk edit cluster-config
+      -mode manager
+      -replication_factor {{ replication_factor }}
+      -search_factor {{ search_factor }}
+      -secret '{{ cluster_secret }}'
+      -cluster_label '{{ cluster_label }}'
+      -auth '{{ splunk_admin_user }}:{{ splunk_admin_password }}'
+
+  register: cluster_config
+  no_log: true
+  changed_when:
+    - "'Cluster manager configuration updated' in cluster_config.stdout or cluster_config.rc == 0"
+
+
+- name: Wait for the Splunk
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: 8089
+    delay: 10
+    timeout: 300
+
+
+- name: Configure Cluster Manager
+  container: splunk-cluster-manager
+  community.docker.docker_container_exec:
+    command:
+      mkdir -p
+      "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local"
+
+- name: Create indexes.conf inside cluster manager container
+  container: splunk-cluster-manager
+  community.docker.docker_container_exec:
+    command: /bin/bash -c "cat > /opt/splunk/etc/manager-apps/ta_index_custom_app/local/indexes.conf <<'EOF'
+      [infra_linux_custom_index]
+      homePath = \$SPLUNK_DB/infra_linux_custom_index/db
+      coldPath = \$SPLUNK_DB/infra_linux_custom_index/colddb
+      thawedPath = \$SPLUNK_DB/infra_linux_custom_index/thaweddb
+      maxTotalDataSizeMB = 500000
+      frozenTimePeriodInSecs = 7776000
+      EOF"
+
+
+- name: Validate cluster bundle
+  container: splunk-cluster-manager
+  community.docker.docker_container_exec:
+    command:
+      {{ splunk_home }}/bin/splunk validate cluster-bundle -auth '{{ splunk_admin_user }}:{{ splunk_admin_password }}'
+    register: cluster_bundle_validation
+    no_log: true
+
+
+- name: Display cluster bundle validation
+  ansible.builtin.debug:
+    var: cluster_bundle_validation.stdout_lines
+
+
+- name: Apply Cluster Bundle
+  container: splunk-cluster-manager
+  community.docker.docker_container_exec:
+    command:
+      {{ splunk_home }}/bin/splunk apply cluster-bundle --answer-yes -auth '{{ splunk_admin_user }}:{{ splunk_admin_password }}'
+    register: cluster_bundle_apply
+    no_log: true
+
+
+- name: Display cluster bundle result
+  ansible.builtin.debug:
+    var: cluster_bundle_apply.stdout_lines
+
+
+- name: Check Cluster manager status
+  container: splunk-cluster-manager
+  community:
+    docker:
+      docker_container_exec:
+        command:
+          {{ splunk_home }}/bin/splunk show cluster-status -auth '{{ splunk_admin_user }}:{{ splunk_admin_password }}'
+        register: cluster_status
+        retries: 10
+        delay: 10
+        until: cluster_status.rc == 0
+        changed_when: false
+        no_log: true
+
+
+- name: Display Cluster Manager status
+  ansible.builtin.debug:
+    var: cluster_status.stdout_lines
+
+
+
+
+
+
+
+
+-

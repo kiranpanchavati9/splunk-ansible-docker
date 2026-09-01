@@ -1,0 +1,66 @@
+- name: Create a Volume for Heavy Forwarder Data
+  community.docker.docker_volume:
+    name: splunk_hf_data
+    driver: local
+
+- name: Create a Docker Container for Heavy Forwarder
+  community.docker.docker_container:
+    name: splunk-heavy-forwarder
+    image: splunk/splunk:latest
+    state: started
+    restart: true
+    published_ports:
+      - "8080:8080"
+      - "8089:8089"
+      - "9997:9997"
+    volumes:
+      - splunk_hf_data:/opt/splunk/
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_PASSWORD={{ splunk_admin_password }}
+
+
+- Check the status of the Heavy Forwarder container
+  community.docker.docker_container_exec:
+    container: splunk-heavy-forwarder
+    cmd: /opt/splunk/bin/splunk status
+    register: splunk_status
+
+- name: Show Splunk HF status
+  ansible.builtin.debug:
+    var: splunk_status.stdout_lines
+
+
+# - name: Connect Heavy Forwarder to Deployment Server
+#   ansible.builtin.command:
+#     argv:
+#       - "{{ splunk_home }}/bin/splunk"
+#       - set
+#       - deploy-poll
+#       - "{{ deployment_server_uri }}"
+#       - -auth
+#       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+#   become: true
+#   become_user: splunk
+#   register: deployment_server_result
+#   changed_when: deployment_server_result.rc == 0
+#   no_log: false
+#   notify: Restart Splunk
+
+# - name: Connect Heavy Forwarder to License Manager
+#   ansible.builtin.command:
+#     argv:
+#       - "{{ splunk_home }}/bin/splunk"
+#       - edit
+#       - licenser-localpeer
+#       - -manager_uri
+#       - "https://{{ license_manager_uri }}"
+#       - -auth
+#       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+#   become: true
+#   become_user: splunk
+#   register: license_manager_result
+#   changed_when: license_manager_result.rc == 0
+#   no_log: true
+#   when: use_remote_license_manager | default(false) | bool
+#   notify: Restart Splunk

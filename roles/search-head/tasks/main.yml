@@ -1,0 +1,184 @@
+---
+- name: Configure SHC settings (non-secret)
+  community.general.ini_file:
+    path: "{{ splunk_home }}/etc/system/local/server.conf"
+    section: shclustering
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    owner: splunk
+    group: splunk
+    mode: "0644"
+    no_extra_spaces: true
+  loop:
+    - option: disabled
+      value: "false"
+    - option: mgmt_uri
+      value: "https://{{ inventory_hostname }}:8089"
+    - option: replication_factor
+      value: "{{ shcluster_replication_factor }}"
+    - option: conf_deploy_fetch_url
+      value: "{{ deployer_uri }}"
+    - option: shcluster_label
+      value: "{{ shcluster_label }}"
+
+- name: Configure SHC pass4SymmKey (secret)
+  community.general.ini_file:
+    path: "{{ splunk_home }}/etc/system/local/server.conf"
+    section: shclustering
+    option: pass4SymmKey
+    value: "{{ shcluster_secret }}"
+    owner: splunk
+    group: splunk
+    mode: "0600"
+    no_extra_spaces: true
+  no_log: true
+
+- name: Configure Splunk server name
+  community.general.ini_file:
+    path: "{{ splunk_home }}/etc/system/local/server.conf"
+    section: general
+    option: serverName
+    value: "{{ inventory_hostname }}"
+    owner: splunk
+    group: splunk
+    mode: "0644"
+    no_extra_spaces: true
+
+- name: Configure SHC replication port
+  community.general.ini_file:
+    path: "{{ splunk_home }}/etc/system/local/server.conf"
+    section: "replication_port://{{ shcluster_replication_port }}"
+    allow_no_value: true
+    owner: splunk
+    group: splunk
+    mode: "0644"
+
+- name: Configure indexer cluster connection (non-secret)
+  community.general.ini_file:
+    path: "{{ splunk_home }}/etc/system/local/server.conf"
+    section: clustering
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    owner: splunk
+    group: splunk
+    mode: "0644"
+    no_extra_spaces: true
+  loop:
+    - option: mode
+      value: searchhead
+    - option: manager_uri
+      value: "{{ cluster_manager_uri }}"
+
+- name: Configure indexer cluster pass4SymmKey (secret)
+  community.general.ini_file:
+    path: "{{ splunk_home }}/etc/system/local/server.conf"
+    section: clustering
+    option: pass4SymmKey
+    value: "{{ cluster_secret }}"
+    owner: splunk
+    group: splunk
+    mode: "0600"
+    no_extra_spaces: true
+  no_log: true
+
+- name: Restart Splunk
+  ansible.builtin.command:
+    cmd: "{{ splunk_home }}/bin/splunk restart"
+  register: splunk_restart_result
+  changed_when: true
+
+# ----------------------------------------------------------------------
+# From here: wait for every search head to be fully back up before any
+# host attempts the SHC bootstrap.
+# ----------------------------------------------------------------------
+
+- name: Wait for splunkd management port to be open on this host
+  ansible.builtin.wait_for:
+    host: "{{ inventory_hostname }}"
+    port: 8089
+    delay: 5
+    timeout: 300
+    state: started
+
+- name: Wait for splunkd REST API to respond on this host
+  ansible.builtin.uri:
+    url: "https://{{ inventory_hostname }}:8089/services/server/info"
+    method: GET
+    user: "{{ splunk_admin_user }}"
+    password: "{{ splunk_admin_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: 200
+  register: splunkd_health
+  until: splunkd_health.status == 200
+  retries: 30
+  delay: 10
+  no_log: true
+
+- name: Mark this search head as ready
+  ansible.builtin.set_fact:
+    shc_host_ready: true
+
+- name: Wait until every search head in the group has confirmed ready
+  ansible.builtin.wait_for:
+    timeout: 1
+  delegate_to: localhost
+  run_once: true
+  vars:
+    all_ready: >-
+      {{ groups['search_heads']
+         | map('extract', hostvars, 'shc_host_ready')
+         | select('defined') | list | length
+         == groups['search_heads'] | length }}
+  until: all_ready
+  retries: 60
+  delay: 10
+
+- name: Check current Search Head Cluster status
+  ansible.builtin.command:
+    argv:
+      - "{{ splunk_home }}/bin/splunk"
+      - show
+      - shcluster-status
+      - -auth
+      - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+  run_once: true
+  delegate_to: "{{ groups['search_heads'][0] }}"
+  register: shc_status
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Determine whether SHC is already initialized
+  ansible.builtin.set_fact:
+    shc_already_initialized: >-
+      {{
+        shc_status.rc == 0 and
+        (
+          'dynamic_captain' in (shc_status.stdout | lower)
+          or
+          'service_ready_flag : 1' in (shc_status.stdout | lower)
+          or
+          'service_ready_flag:1' in
+             (shc_status.stdout | lower | regex_replace('\\s+', ''))
+        )
+      }}
+  run_once: true
+  delegate_to: "{{ groups['search_heads'][0] }}"
+
+- name: Bootstrap Search Head Cluster captain
+  ansible.builtin.command:
+    argv:
+      - "{{ splunk_home }}/bin/splunk"
+      - bootstrap
+      - shcluster-captain
+      - -servers_list
+      - "{{ shc_members_uri_list | regex_replace('\\s+', '') }}"
+      - -auth
+      - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+  run_once: true
+  delegate_to: "{{ groups['search_heads'][0] }}"
+  when: not shc_already_initialized | bool
+  register: shc_bootstrap_result
+  changed_when: shc_bootstrap_result.rc == 0
+  no_log: true
