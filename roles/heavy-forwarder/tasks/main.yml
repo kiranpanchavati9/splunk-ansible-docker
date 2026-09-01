@@ -27,6 +27,7 @@
 - name: Check Splunk Heavy Forwarder status
   community.docker.docker_container_exec:
     container: splunk-heavy-forwarder
+    user: splunk
     command: /opt/splunk/bin/splunk status
   register: splunk_status
   retries: 30
@@ -39,7 +40,6 @@
 - name: Show Splunk Heavy Forwarder status
   ansible.builtin.debug:
     var: splunk_status.stdout_lines
-
 
 # - name: Connect Heavy Forwarder to Deployment Server
 #   ansible.builtin.command:
