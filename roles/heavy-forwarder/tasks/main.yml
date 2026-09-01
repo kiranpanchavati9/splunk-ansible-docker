@@ -30,12 +30,10 @@
   register: splunk_status
   retries: 12
   delay: 10
-  until: splunk_status.rc == 0
+  until:
+    - splunk_status.stdout is defined
+    - "'splunkd is running' in splunk_status.stdout"
   changed_when: false
-
-- name: Show Splunk HF status
-  ansible.builtin.debug:
-    var: splunk_status.stdout_lines
 
 
 # - name: Connect Heavy Forwarder to Deployment Server
