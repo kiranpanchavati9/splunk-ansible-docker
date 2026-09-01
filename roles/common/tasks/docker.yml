@@ -19,9 +19,3 @@
     name: docker
     state: started
     enabled: true
-
-- name: Enable Docker Service
-  ansible.builtin.systemd:
-    name: docker
-    state: enabled
-
