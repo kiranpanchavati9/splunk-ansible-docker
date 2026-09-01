@@ -16,11 +16,11 @@
       - python3-pip
     state: present
 
-- name: Install Docker Python SDK
+- name: Install Docker Python dependencies
   ansible.builtin.pip:
     name:
       - docker
-      - requests
+      - "requests<2.32.0"
     executable: pip3
 
 - name: Start Docker Service

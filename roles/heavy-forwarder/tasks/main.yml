@@ -1,3 +1,4 @@
+---
 - name: Create a Volume for Heavy Forwarder Data
   community.docker.docker_volume:
     name: splunk_hf_data
@@ -8,30 +9,35 @@
     name: splunk-heavy-forwarder
     image: splunk/splunk:latest
     state: started
-    restart: true
+    restart_policy: unless-stopped
+
     published_ports:
-      - "8080:8080"
+      - "8000:8000"
       - "8089:8089"
       - "9997:9997"
-    volumes:
-      - splunk_hf_data:/opt/splunk/
-    environment:
-      - SPLUNK_START_ARGS=--accept-license
-      - SPLUNK_PASSWORD={{ splunk_admin_password }}
 
+    volumes:
+      - "splunk_hf_data:/opt/splunk"
+
+    env:
+      SPLUNK_START_ARGS: "--accept-license"
+      SPLUNK_PASSWORD: "{{ splunk_admin_password }}"
+
+- name: Wait for Splunk to start
+  ansible.builtin.pause:
+    seconds: 30
 
 - name: Check the status of the Heavy Forwarder container
   community.docker.docker_container_exec:
     container: splunk-heavy-forwarder
     command: /opt/splunk/bin/splunk status
   register: splunk_status
-  changed_when: splunk_status.rc == 0
-
+  changed_when: false
 
 - name: Show Splunk HF status
   ansible.builtin.debug:
     var: splunk_status.stdout_lines
-
+    
 
 # - name: Connect Heavy Forwarder to Deployment Server
 #   ansible.builtin.command:
