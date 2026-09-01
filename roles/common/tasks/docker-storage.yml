@@ -1,0 +1,19 @@
+---
+- name: Create XFS filesystem on Docker disk
+  community.general.filesystem:
+    fstype: xfs
+    dev: /dev/nvme1n1
+
+- name: Create Docker storage mount point
+  ansible.builtin.file:
+    path: /opt/docker
+    state: directory
+    mode: "0755"
+
+- name: Mount Docker storage disk
+  ansible.posix.mount:
+    path: /opt/docker
+    src: /dev/nvme1n1
+    fstype: xfs
+    opts: defaults,nofail
+    state: mounted

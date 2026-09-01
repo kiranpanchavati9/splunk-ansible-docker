@@ -1,11 +1,11 @@
 ---
-- name: Download the Docker Repo File
+- name: Download Docker repository file
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/rhel/docker-ce.repo
     dest: /etc/yum.repos.d/docker-ce.repo
     mode: "0644"
 
-- name: Install Docker
+- name: Install Docker packages
   ansible.builtin.dnf:
     name:
       - docker-ce
@@ -16,14 +16,29 @@
       - python3-pip
     state: present
 
-- name: Install Docker Python dependencies
+- name: Install Docker Python SDK
   ansible.builtin.pip:
     name:
       - docker
-      - "requests<2.32.0"
     executable: pip3
 
-- name: Start Docker Service
+- name: Create Docker configuration directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+
+- name: Configure Docker data root
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    content: |
+      {
+        "data-root": "/opt/docker"
+      }
+  notify: Restart Docker
+
+- name: Start and enable Docker service
   ansible.builtin.systemd:
     name: docker
     state: started

@@ -1,3 +1,8 @@
 ---
 - name: Install Docker
   ansible.builtin.import_tasks: docker.yml
+
+---
+- name: Configure Docker storage
+  ansible.builtin.import_tasks: docker-storage.yml
+
