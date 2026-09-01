@@ -1,5 +1,14 @@
-- name: Heavy forwarder Playbook
+---
+- name: Install Docker on Heavy Forwarder
   hosts: heavy_forwarders
-  become: yes
+  become: true
+
+  roles:
+    - common
+
+- name: Deploy Splunk Heavy Forwarder
+  hosts: heavy_forwarders
+  become: true
+
   roles:
     - heavy-forwarder

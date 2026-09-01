@@ -24,7 +24,9 @@
   community.docker.docker_container_exec:
     container: splunk-heavy-forwarder
     cmd: /opt/splunk/bin/splunk status
-    register: splunk_status
+  register: splunk_status
+  changed_when: splunk_status.rc == 0
+
 
 - name: Show Splunk HF status
   ansible.builtin.debug:
