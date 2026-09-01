@@ -20,6 +20,7 @@
       - "splunk_hf_data:/opt/splunk"
 
     env:
+      SPLUNK_GENERAL_TERMS: "--accept-sgt-current-at-splunk-com"
       SPLUNK_START_ARGS: "--accept-license"
       SPLUNK_PASSWORD: "{{ splunk_admin_password }}"
 
@@ -28,12 +29,16 @@
     container: splunk-heavy-forwarder
     command: /opt/splunk/bin/splunk status
   register: splunk_status
-  retries: 12
+  retries: 30
   delay: 10
   until:
     - splunk_status.stdout is defined
     - "'splunkd is running' in splunk_status.stdout"
   changed_when: false
+
+- name: Show Splunk Heavy Forwarder status
+  ansible.builtin.debug:
+    var: splunk_status.stdout_lines
 
 
 # - name: Connect Heavy Forwarder to Deployment Server
