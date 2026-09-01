@@ -1,0 +1,34 @@
+---
+ansible_user: ec2-user
+ansible_ssh_private_key_file: /home/ec2-user/.ssh/aws-helpag.pem
+ansible_python_interpreter: /usr/bin/python3
+
+splunk_home: /opt/splunk
+splunk_admin_user: admin
+splunk_admin_password: Pa55word
+
+cluster_secret: SplunkCluster@123
+shcluster_secret: SplunkSHCluster@123
+cluster_label: Splunk-Dev-Cluster
+shcluster_label: Splunk-Dev-SHCluster
+
+cluster_manager_uri: https://cluster-manager.dev.kiranpanchavati.online:8089
+deployer_uri: https://deployer.dev.kiranpanchavati.online:8089
+license_manager_uri: https://license-master.dev.kiranpanchavati.online:8089
+monitoring_console_uri: https://monitoring-console.dev.kiranpanchavati.online:8000
+search_head_1_uri: https://search-head1.dev.kiranpanchavati.online:8000
+search_head_2_uri: https://search-head2.dev.kiranpanchavati.online:8000
+search_head_3_uri: https://search-head3.dev.kiranpanchavati.online:8000 
+deployment_server_uri: https://deployment-server.dev.kiranpanchavati.online:8089
+indexer_1_uri: https://indexer1.dev.kiranpanchavati.online:9997
+indexer_2_uri: https://indexer2.dev.kiranpanchavati.online:9997
+
+shc_members_uri_list: >-
+  https://search-head1.dev.kiranpanchavati.online:8089,
+  https://search-head2.dev.kiranpanchavati.online:8089,
+  https://search-head3.dev.kiranpanchavati.online:8089
+
+replication_factor: 2
+search_factor: 2
+shcluster_replication_factor: 2
+shcluster_replication_port: 9000
