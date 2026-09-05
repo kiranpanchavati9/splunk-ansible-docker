@@ -1,4 +1,3 @@
----
 - name: Install required storage packages
   ansible.builtin.dnf:
     name:
@@ -7,49 +6,28 @@
       - rsync
     state: present
 
-# ---------------------------------------------------------
-# Create LVM PV on 300 GB disk
-# ---------------------------------------------------------
-- name: Create physical volume on nvme1n1
-  ansible.builtin.command:
-    cmd: pvcreate /dev/nvme1n1
-  register: pvcreate_result
-  failed_when:
-    - pvcreate_result.rc != 0
-    - "'already' not in pvcreate_result.stderr | lower"
-  changed_when: pvcreate_result.rc == 0
-
-# ---------------------------------------------------------
-# Create dedicated VG
-# ---------------------------------------------------------
-- name: Create Docker/Splunk volume group
+- name: Create DataVG using the 300GB disk
   community.general.lvg:
     vg: DataVG
     pvs: /dev/nvme1n1
+    state: present
 
-# ---------------------------------------------------------
-# Create 100 GB for Splunk
-# ---------------------------------------------------------
-- name: Create Splunk logical volume
+- name: Create 100GB Splunk logical volume
   community.general.lvol:
     vg: DataVG
     lv: splunkVol
     size: 100g
     shrink: false
+    state: present
 
-# ---------------------------------------------------------
-# Create remaining space for /var/lib
-# ---------------------------------------------------------
-- name: Create var lib logical volume
+- name: Create varLibVol using remaining free space
   community.general.lvol:
     vg: DataVG
     lv: varLibVol
     size: 100%FREE
     shrink: false
+    state: present
 
-# ---------------------------------------------------------
-# Format filesystems
-# ---------------------------------------------------------
 - name: Create XFS filesystem for Splunk
   community.general.filesystem:
     fstype: xfs
@@ -60,41 +38,32 @@
     fstype: xfs
     dev: /dev/DataVG/varLibVol
 
-# ---------------------------------------------------------
-# Temporary mount points
-# ---------------------------------------------------------
-- name: Create temporary Splunk mount
+- name: Create temporary Splunk mount point
   ansible.builtin.file:
     path: /mnt/new_splunk
     state: directory
     mode: '0755'
 
-- name: Create temporary var lib mount
+- name: Create temporary var lib mount point
   ansible.builtin.file:
     path: /mnt/new_var_lib
     state: directory
     mode: '0755'
 
-# ---------------------------------------------------------
-# Temporarily mount new filesystems
-# ---------------------------------------------------------
-- name: Mount Splunk LV temporarily
+- name: Temporarily mount Splunk LV
   ansible.posix.mount:
     path: /mnt/new_splunk
-    src: /dev/mapper/DataVG-splunkVol
+    src: /dev/DataVG/splunkVol
     fstype: xfs
     state: mounted
 
-- name: Mount var lib LV temporarily
+- name: Temporarily mount var lib LV
   ansible.posix.mount:
     path: /mnt/new_var_lib
-    src: /dev/mapper/DataVG-varLibVol
+    src: /dev/DataVG/varLibVol
     fstype: xfs
     state: mounted
 
-# ---------------------------------------------------------
-# Copy existing data if present
-# ---------------------------------------------------------
 - name: Ensure /opt/splunk exists
   ansible.builtin.file:
     path: /opt/splunk
@@ -111,9 +80,6 @@
     cmd: rsync -aHAX --numeric-ids /var/lib/ /mnt/new_var_lib/
   changed_when: true
 
-# ---------------------------------------------------------
-# Unmount temporary mounts
-# ---------------------------------------------------------
 - name: Unmount temporary Splunk filesystem
   ansible.posix.mount:
     path: /mnt/new_splunk
@@ -124,48 +90,32 @@
     path: /mnt/new_var_lib
     state: unmounted
 
-# ---------------------------------------------------------
-# Permanent mounts
-# ---------------------------------------------------------
-- name: Mount Splunk LV on /opt/splunk
+- name: Permanently mount Splunk LV
   ansible.posix.mount:
     path: /opt/splunk
-    src: /dev/mapper/DataVG-splunkVol
+    src: /dev/DataVG/splunkVol
     fstype: xfs
     opts: defaults
     dump: '0'
     passno: '0'
     state: mounted
 
-- name: Mount var lib LV on /var/lib
+- name: Permanently mount var lib LV
   ansible.posix.mount:
     path: /var/lib
-    src: /dev/mapper/DataVG-varLibVol
+    src: /dev/DataVG/varLibVol
     fstype: xfs
     opts: defaults
     dump: '0'
     passno: '0'
     state: mounted
 
-# ---------------------------------------------------------
-# Verification
-# ---------------------------------------------------------
-- name: Verify storage layout
+- name: Verify storage
   ansible.builtin.command:
     cmd: df -h /opt/splunk /var/lib
   register: storage_df
   changed_when: false
 
-- name: Display storage layout
+- name: Display storage
   ansible.builtin.debug:
     var: storage_df.stdout_lines
-
-- name: Display LVM layout
-  ansible.builtin.command:
-    cmd: lvs
-  register: lvs_output
-  changed_when: false
-
-- name: Show logical volumes
-  ansible.builtin.debug:
-    var: lvs_output.stdout_lines
