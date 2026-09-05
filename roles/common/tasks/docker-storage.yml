@@ -1,4 +1,4 @@
-- name: Install required storage packages
+- name: Install required storage packages for Docker storage
   ansible.builtin.dnf:
     name:
       - lvm2
