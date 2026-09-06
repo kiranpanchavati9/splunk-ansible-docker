@@ -42,19 +42,23 @@
     var: splunk_status.stdout_lines
 
 
-- name: Show configured Deployment Server
+- name: Set Deployment Server
   community.docker.docker_container_exec:
     container: splunk-heavy-forwarder
     user: splunk
     argv:
       - /opt/splunk/bin/splunk
-      - show
+      - set
       - deploy-poll
+      - "{{ deployment_server_uri }}:8089"
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  register: deploy_poll_status
-  changed_when: false
-  no_log: true
+
+- name: Restart Splunk to apply deployment-client configuration
+  community.docker.docker_container_exec:
+    container: splunk-heavy-forwarder
+    user: splunk
+    command: /opt/splunk/bin/splunk restart
 
 
 # - name: Connect Heavy Forwarder to License Manager
