@@ -59,31 +59,30 @@
     var: splunk_status.stdout_lines
 
 
-- name: Get Splunk user UID and GID
+- name: Get Splunk UID
   community.docker.docker_container_exec:
     container: splunk-deployment-server
-    command: id splunk
-  register: splunk_id
+    command: id -u splunk
+  register: splunk_uid
   changed_when: false
 
 
-- name: Show Splunk UID/GID
+- name: Get Splunk GID
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    command: id -g splunk
+  register: splunk_gid
+  changed_when: false
+
+
+- name: Show Splunk UID and GID
   ansible.builtin.debug:
-    var: splunk_id.stdout
+    msg:
+      - "Splunk UID: {{ splunk_uid.stdout }}"
+      - "Splunk GID: {{ splunk_gid.stdout }}"
 
 
-- name: Create deployment app base directory
-  community.docker.docker_container_exec:
-    container: splunk-deployment-server
-    user: splunk
-    argv:
-      - mkdir
-      - -p
-      - "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app"
-  changed_when: false
-
-
-- name: Create deployment app local directory
+- name: Create deployment app directories
   community.docker.docker_container_exec:
     container: splunk-deployment-server
     user: splunk
@@ -91,46 +90,32 @@
       - mkdir
       - -p
       - "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local"
-  changed_when: false
-
-
-- name: Create deployment app default directory
-  community.docker.docker_container_exec:
-    container: splunk-deployment-server
-    user: splunk
-    argv:
-      - mkdir
-      - -p
       - "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default"
   changed_when: false
 
 
-- name: Create serverclass.conf file
+- name: Create serverclass.conf
   community.docker.docker_container_copy_into:
     container: splunk-deployment-server
     container_path: "{{ splunk_home }}/etc/system/local/serverclass.conf"
-
     content: |
       [serverClass:dev_infrateam_linux]
       whitelist.0 = *
 
       [serverClass:dev_infrateam_linux:app:infra_linux_custom_app]
       restartSplunkd = true
-
-    owner_id: 41812
-    group_id: 41812
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
     mode: "0644"
     mode_parse: modern
-
   notify:
     - Reload Splunk Deployment Server
 
 
-- name: Create app.conf file
+- name: Create app.conf
   community.docker.docker_container_copy_into:
     container: splunk-deployment-server
     container_path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default/app.conf"
-
     content: |
       [launcher]
       author = Splunk
@@ -139,58 +124,50 @@
 
       [package]
       id = infra_linux_custom_app
-
-    owner_id: 41812
-    group_id: 41812
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
     mode: "0644"
     mode_parse: modern
-
   notify:
     - Reload Splunk Deployment Server
 
 
-- name: Create inputs.conf file
+- name: Create inputs.conf
   community.docker.docker_container_copy_into:
     container: splunk-deployment-server
     container_path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/inputs.conf"
-
     content: |
       [monitor:///var/log/secure]
       sourcetype = infra_linux_custom_sourcetype
       index = infra_linux_custom_index
       disabled = false
-
-    owner_id: 41812
-    group_id: 41812
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
     mode: "0644"
     mode_parse: modern
-
   notify:
     - Reload Splunk Deployment Server
 
 
-- name: Create outputs.conf file
+- name: Create outputs.conf
   community.docker.docker_container_copy_into:
     container: splunk-deployment-server
     container_path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/outputs.conf"
-
     content: |
       [tcpout]
       defaultGroup = indexergroup
 
       [tcpout:indexergroup]
       server = {{ indexer_1_uri }}, {{ indexer_2_uri }}
-
-    owner_id: 41812
-    group_id: 41812
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
     mode: "0644"
     mode_parse: modern
-
   notify:
     - Reload Splunk Deployment Server
 
 
-- name: Validate serverclass.conf
+- name: Validate serverclass configuration
   community.docker.docker_container_exec:
     container: splunk-deployment-server
     user: splunk
@@ -200,12 +177,12 @@
   changed_when: false
 
 
-- name: Show serverclass.conf configuration
+- name: Show serverclass configuration
   ansible.builtin.debug:
     var: serverclass_btool.stdout_lines
 
 
-- name: Validate deployment app configuration
+- name: Validate deployment app inputs
   community.docker.docker_container_exec:
     container: splunk-deployment-server
     user: splunk
@@ -213,16 +190,33 @@
       /opt/splunk/bin/splunk btool inputs list
       --app=infra_linux_custom_app
       --debug
-  register: app_inputs_btool
+  register: inputs_btool
   changed_when: false
 
 
-- name: Show deployment app inputs configuration
+- name: Show deployment app inputs
   ansible.builtin.debug:
-    var: app_inputs_btool.stdout_lines
+    var: inputs_btool.stdout_lines
 
 
-- name: List deployment apps
+- name: Validate deployment app outputs
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    user: splunk
+    command: >
+      /opt/splunk/bin/splunk btool outputs list
+      --app=infra_linux_custom_app
+      --debug
+  register: outputs_btool
+  changed_when: false
+
+
+- name: Show deployment app outputs
+  ansible.builtin.debug:
+    var: outputs_btool.stdout_lines
+
+
+- name: List Deployment Server clients
   community.docker.docker_container_exec:
     container: splunk-deployment-server
     user: splunk
