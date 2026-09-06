@@ -1,81 +1,126 @@
-- name: Create serverclass.conf file
-  ansible.builtin.copy:
-    dest: "{{ splunk_home }}/etc/system/local/serverclass.conf"
-    owner: splunk
-    group: splunk
-    mode: '0644'
-    content: |
-      [serverClass:dev_infrateam_linux]
-      whitelist.0 = *
+---
+- name: Create a volume for Deployment Server data
+  community.docker.docker_volume:
+    name: splunk_ds_data
 
-      [serverClass:dev_infrateam_linux:app:infra_linux_custom_app]
-      restartSplunkd = true
-  notify: Restart Splunk
+- name: Create Splunk Deployment Server container
+  community.docker.docker_container:
+    name: splunk-deployment-server
+    image: splunk/splunk:latest
+    state: started
+    restart_policy: unless-stopped
+    pull: true
 
-- name: Create new custom app directory
-  ansible.builtin.file:
-    path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app"
-    state: directory
-    owner: splunk
-    group: splunk
-    mode: '0755'
+    published_ports:
+      - "8000:8000"
+      - "8089:8089"
+      - "9997:9997"
 
-- name: Create local directory for the app
-  ansible.builtin.file:
-    path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local"
-    state: directory
-    owner: splunk
-    group: splunk
-    mode: '0755'
+    volumes:
+      - "splunk_ds_data:/opt/splunk"
+
+    env:
+      SPLUNK_GENERAL_TERMS: "--accept-sgt-current-at-splunk-com"
+      SPLUNK_START_ARGS: "--accept-license"
+      SPLUNK_PASSWORD: "{{ splunk_admin_password }}"
+
+- name: Check Splunk Deployment Server status
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    user: splunk
+    command: /opt/splunk/bin/splunk status
+  register: splunk_status
+  retries: 30
+  delay: 10
+  until:
+    - splunk_status.stdout is defined
+    - "'splunkd is running' in splunk_status.stdout"
+  changed_when: false
+
+- name: Show Splunk Deployment Server status
+  ansible.builtin.debug:
+    var: splunk_status.stdout_lines
 
 
-- name: Create default directory for the app
-  ansible.builtin.file:
-    path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default"
-    state: directory
-    owner: splunk
-    group: splunk
-    mode: '0755'
 
-- name: Create app.conf file
-  ansible.builtin.copy:
-    dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default/app.conf"
-    owner: splunk
-    group: splunk
-    mode: '0644'
-    content: |
-      [launcher]
-      author = Splunk
-      description = Custom app for deployment server
-      version = 1.0.0
+# - name: Create serverclass.conf file
+#   ansible.builtin.copy:
+#     dest: "{{ splunk_home }}/etc/system/local/serverclass.conf"
+#     owner: splunk
+#     group: splunk
+#     mode: '0644'
+#     content: |
+#       [serverClass:dev_infrateam_linux]
+#       whitelist.0 = *
 
-      [package]
-      id = infra_linux_custom_app
+#       [serverClass:dev_infrateam_linux:app:infra_linux_custom_app]
+#       restartSplunkd = true
+#   notify: Restart Splunk
 
-- name: Create inputs.conf file in the local directory 
-  ansible.builtin.copy:
-    dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/inputs.conf"
-    owner: splunk
-    group: splunk
-    mode: '0644'
-    content: |
-      [monitor:///var/log/secure]
-      sourcetype = infra_linux_custom_sourcetype
-      index = infra_linux_custom_index
-      disabled = false 
+# - name: Create new custom app directory
+#   ansible.builtin.file:
+#     path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app"
+#     state: directory
+#     owner: splunk
+#     group: splunk
+#     mode: '0755'
 
-- name: Create outputs.conf file in the local directory
-  ansible.builtin.copy:
-    dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/outputs.conf"
-    owner: splunk
-    group: splunk
-    mode: '0644'
-    content: |
-      [tcpout]
-      defaultGroup = indexergroup
+# - name: Create local directory for the app
+#   ansible.builtin.file:
+#     path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local"
+#     state: directory
+#     owner: splunk
+#     group: splunk
+#     mode: '0755'
 
-      [tcpout:indexergroup]
-      server = {{ indexer_1_uri }}, {{ indexer_2_uri }}
 
-- name: Reload deployment server to push app
-  ansible.builtin.command: "{{ splunk_home }}/bin/splunk reload deploy-server -auth {{ splunk_admin_user }}:{{ splunk_admin_password }}"
+# - name: Create default directory for the app
+#   ansible.builtin.file:
+#     path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default"
+#     state: directory
+#     owner: splunk
+#     group: splunk
+#     mode: '0755'
+
+# - name: Create app.conf file
+#   ansible.builtin.copy:
+#     dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default/app.conf"
+#     owner: splunk
+#     group: splunk
+#     mode: '0644'
+#     content: |
+#       [launcher]
+#       author = Splunk
+#       description = Custom app for deployment server
+#       version = 1.0.0
+
+#       [package]
+#       id = infra_linux_custom_app
+
+# - name: Create inputs.conf file in the local directory 
+#   ansible.builtin.copy:
+#     dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/inputs.conf"
+#     owner: splunk
+#     group: splunk
+#     mode: '0644'
+#     content: |
+#       [monitor:///var/log/secure]
+#       sourcetype = infra_linux_custom_sourcetype
+#       index = infra_linux_custom_index
+#       disabled = false 
+
+# - name: Create outputs.conf file in the local directory
+#   ansible.builtin.copy:
+#     dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/outputs.conf"
+#     owner: splunk
+#     group: splunk
+#     mode: '0644'
+#     content: |
+#       [tcpout]
+#       defaultGroup = indexergroup
+
+#       [tcpout:indexergroup]
+#       server = {{ indexer_1_uri }}, {{ indexer_2_uri }}
+
+# - name: Reload deployment server to push app
+#   ansible.builtin.command: "{{ splunk_home }}/bin/splunk reload deploy-server -auth {{ splunk_admin_user }}:{{ splunk_admin_password }}"
