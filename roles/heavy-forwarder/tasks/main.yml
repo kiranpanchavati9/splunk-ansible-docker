@@ -42,14 +42,27 @@
     var: splunk_status.stdout_lines
 
 
-- name: Connect Heavy Forwarder to Deployment Server
+- name: Show configured Deployment Server
   community.docker.docker_container_exec:
     container: splunk-heavy-forwarder
     user: splunk
-    command: /opt/splunk/bin/splunk set deploy-poll {{ deployment_server_uri }} -auth {{ splunk_admin_user }}:{{ splunk_admin_password }}
-  register: deployment_server_result
-  changed_when: deployment_server_result.rc == 0
-  notify: Restart Splunk
+    argv:
+      - /opt/splunk/bin/splunk
+      - show
+      - deploy-poll
+      - -auth
+      - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+  register: deploy_poll_status
+  changed_when: false
+  no_log: true
+
+
+- name: Verify Deployment Server port connectivity
+  community.docker.docker_container_exec:
+    container: splunk-heavy-forwarder
+    command: >
+      bash -c 'timeout 5 bash -c "</dev/tcp/{{ deployment_server_host }}/8089"'
+  changed_when: false
 
 
 
