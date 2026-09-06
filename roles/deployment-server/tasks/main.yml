@@ -42,85 +42,103 @@
     var: splunk_status.stdout_lines
 
 
+- name: Create serverclass file 
+  community.docker.docker_container_copy_into:
+    container: splunk-deployment-server
+    path: "{{ splunk_home }}/etc/system/local/serverclass.conf"
+    owner: splunk
+    group: splunk 
+    mode: '0644'
+    content: |
+      [serverClass:dev_infrateam_linux]
+      whitelist.0 = *
 
-# - name: Create serverclass.conf file
-#   ansible.builtin.copy:
-#     dest: "{{ splunk_home }}/etc/system/local/serverclass.conf"
-#     owner: splunk
-#     group: splunk
-#     mode: '0644'
-#     content: |
-#       [serverClass:dev_infrateam_linux]
-#       whitelist.0 = *
+      [serverClass:dev_infrateam_linux:app:infra_linux_custom_app]
+      restartSplunkd = true
+  notify: Restart Splunk
 
-#       [serverClass:dev_infrateam_linux:app:infra_linux_custom_app]
-#       restartSplunkd = true
-#   notify: Restart Splunk
+- name: Create new custom app directory inside container
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    user: splunk
+    mode: '0755'
+    argv:
+      - mkdir
+      - -p
+      - "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app"
+  notify: Reload Splunk Deployment Server
+  
 
-# - name: Create new custom app directory
-#   ansible.builtin.file:
-#     path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app"
-#     state: directory
-#     owner: splunk
-#     group: splunk
-#     mode: '0755'
-
-# - name: Create local directory for the app
-#   ansible.builtin.file:
-#     path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local"
-#     state: directory
-#     owner: splunk
-#     group: splunk
-#     mode: '0755'
+- name: Create local directory for the app
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    user: splunk
+    group: splunk
+    mode: '0755'
+    argv:
+      - mkdir
+      - -p
+      - "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local"
+  notify: Reload Splunk Deployment Server
 
 
-# - name: Create default directory for the app
-#   ansible.builtin.file:
-#     path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default"
-#     state: directory
-#     owner: splunk
-#     group: splunk
-#     mode: '0755'
+- name: Create default directory for the app
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    user: splunk
+    group: splunk
+    mode: '0755'
+    argv:
+      - mkdir
+      - -p
+      - "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default"
+  notify: Reload Splunk Deployment Server
 
-# - name: Create app.conf file
-#   ansible.builtin.copy:
-#     dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default/app.conf"
-#     owner: splunk
-#     group: splunk
-#     mode: '0644'
-#     content: |
-#       [launcher]
-#       author = Splunk
-#       description = Custom app for deployment server
-#       version = 1.0.0
 
-#       [package]
-#       id = infra_linux_custom_app
+- name: Create app.conf file
+  community.docker.docker_container_copy_into:
+    container: splunk-deployment-server
+    path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/default/app.conf"
+    owner: splunk
+    group: splunk
+    mode: '0644'
+    content: |
+      [launcher]
+      author = Splunk
+      description = Custom app for deployment server
+      version = 1.0.0
+      
+      [package]
+      id = infra_linux_custom_app
+  notify: Reload Splunk Deployment Server
+  
 
-# - name: Create inputs.conf file in the local directory 
-#   ansible.builtin.copy:
-#     dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/inputs.conf"
-#     owner: splunk
-#     group: splunk
-#     mode: '0644'
-#     content: |
-#       [monitor:///var/log/secure]
-#       sourcetype = infra_linux_custom_sourcetype
-#       index = infra_linux_custom_index
-#       disabled = false 
-
-# - name: Create outputs.conf file in the local directory
-#   ansible.builtin.copy:
-#     dest: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/outputs.conf"
-#     owner: splunk
-#     group: splunk
-#     mode: '0644'
-#     content: |
-#       [tcpout]
-#       defaultGroup = indexergroup
-
-#       [tcpout:indexergroup]
-#       server = {{ indexer_1_uri }}, {{ indexer_2_uri }}
-
-# - name: Reload deployment server to push app
-#   ansible.builtin.command: "{{ splunk_home }}/bin/splunk reload deploy-server -auth {{ splunk_admin_user }}:{{ splunk_admin_password }}"
+- name: Create inputs.conf file in the local directory
+  community.docker.docker_container_copy_into:
+    container: splunk-deployment-server
+    path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/inputs.conf"
+    owner: splunk
+    group: splunk
+    mode: '0644'
+    content: |
+      [monitor:///var/log/secure]
+      sourcetype = infra_linux_custom_sourcetype
+      index = infra_linux_custom_index
+      disabled = false 
+  notify: Reload Splunk Deployment Server
+  
+  
+- name: Create outputs.conf file in the local directory
+  community.docker.docker_container_copy_into:
+    container: splunk-deployment-server
+    path: "{{ splunk_home }}/etc/deployment-apps/infra_linux_custom_app/local/outputs.conf"
+    owner: splunk
+    group: splunk
+    mode: '0644'
+    content: |
+      [tcpout]
+      defaultGroup = indexergroup
+      
+      [tcpout:indexergroup]
+      server = {{ indexer_1_uri }}, {{ indexer_2_uri }}
+  notify: Reload Splunk Deployment Server
