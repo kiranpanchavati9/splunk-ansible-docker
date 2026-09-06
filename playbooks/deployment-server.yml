@@ -1,5 +1,14 @@
-- name: Deployment Server Playbook
+---
+- name: Install Docker on Deployment Server
   hosts: deployment_server
-  become: yes
+  become: true
+
+  roles:
+    - common
+
+- name: Deploy Splunk Deployment Server
+  hosts: deployment_server
+  become: true
+
   roles:
     - deployment-server
