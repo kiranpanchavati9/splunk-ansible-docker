@@ -57,22 +57,6 @@
   no_log: true
 
 
-- name: Verify Deployment Server port connectivity
-  community.docker.docker_container_exec:
-    container: splunk-heavy-forwarder
-    command: >
-      bash -c 'timeout 5 bash -c "</dev/tcp/{{ deployment_server_uri }}/8089"'
-  register: deployment_server_connectivity
-  changed_when: false
-  no_log: true
-
-- name: Show Deployment Server connectivity status
-  ansible.builtin.debug:
-    var: deployment_server_connectivity.stdout_lines
-  changed_when: false
-  no_log: true
-
-
 # - name: Connect Heavy Forwarder to License Manager
 #   ansible.builtin.command:
 #     argv:
