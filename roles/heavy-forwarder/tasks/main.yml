@@ -41,21 +41,17 @@
   ansible.builtin.debug:
     var: splunk_status.stdout_lines
 
-# - name: Connect Heavy Forwarder to Deployment Server
-#   ansible.builtin.command:
-#     argv:
-#       - "{{ splunk_home }}/bin/splunk"
-#       - set
-#       - deploy-poll
-#       - "{{ deployment_server_uri }}"
-#       - -auth
-#       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-#   become: true
-#   become_user: splunk
-#   register: deployment_server_result
-#   changed_when: deployment_server_result.rc == 0
-#   no_log: false
-#   notify: Restart Splunk
+
+- name: Connect Heavy Forwarder to Deployment Server
+  community.docker.docker_container_exec:
+    container: splunk-heavy-forwarder
+    user: splunk
+    command: /opt/splunk/bin/splunk set deploy-poll {{ deployment_server_uri }} -auth {{ splunk_admin_user }}:{{ splunk_admin_password }}
+  register: deployment_server_result
+  changed_when: deployment_server_result.rc == 0
+  notify: Restart Splunk
+
+
 
 # - name: Connect Heavy Forwarder to License Manager
 #   ansible.builtin.command:
