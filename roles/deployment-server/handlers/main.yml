@@ -1,5 +1,10 @@
-- name: Restart Splunk
-  ansible.builtin.command:
-    cmd: "{{ splunk_home }}/bin/splunk restart"
-  become: true
-  become_user: root
+---
+- name: Reload Splunk Deployment Server
+  community.docker.docker_container_exec:
+    container: splunk-deployment-server
+    user: splunk
+    command: >
+      /opt/splunk/bin/splunk reload deploy-server
+      -auth admin:{{ splunk_admin_password }}
+  register: reload_ds
+  changed_when: true
