@@ -1,5 +1,0 @@
-- name: Deployer Playbook
-  hosts: deployer
-  become: yes
-  roles:
-    - deployer
