@@ -135,4 +135,25 @@
       homePath = $SPLUNK_DB/infra_linux_custom_index/db
       coldPath = $SPLUNK_DB/infra_linux_custom_index/colddb
       thawedPath = $SPLUNK_DB/infra_linux_custom_index/thaweddb
-  notify: Apply Indexer Cluster Bundle
+
+
+- name: Validate Indexer Cluster Bundle
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    user: splunk
+    argv:
+      - "{{ splunk_home }}/bin/splunk"
+      - validate
+      - cluster-bundle
+      - -auth
+      - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+  register: cluster_bundle_validation
+  changed_when: false
+  no_log: false
+  listen: Apply Indexer Cluster Bundle
+
+
+  - name: Show cluster bundle validation
+  ansible.builtin.debug:
+    var: cluster_bundle_validation
+  listen: Apply Indexer Cluster Bundle
