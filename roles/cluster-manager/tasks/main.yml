@@ -1,7 +1,93 @@
-
 ---
+- name: Create a volume for Cluster Manager data
+  community.docker.docker_volume:
+    name: splunk_cm_data
+
+- name: Create Splunk Cluster Manager container
+  community.docker.docker_container:
+    name: splunk-cluster-manager
+    image: splunk/splunk:latest
+    state: started
+    restart_policy: unless-stopped
+    pull: true
+
+    published_ports:
+      - "8000:8000"
+      - "8089:8089"
+      - "9997:9997"
+
+    volumes:
+      - "splunk_cm_data:/opt/splunk"
+
+    env:
+      SPLUNK_GENERAL_TERMS: "--accept-sgt-current-at-splunk-com"
+      SPLUNK_START_ARGS: "--accept-license"
+      SPLUNK_PASSWORD: "{{ splunk_admin_password }}"
+
+
+- name: Wait for Splunk container to become healthy
+  community.docker.docker_container_info:
+    name: splunk-cluster-manager
+  register: splunk_container_info
+  retries: 30
+  delay: 10
+  until:
+    - splunk_container_info.container is defined
+    - splunk_container_info.container.State is defined
+    - splunk_container_info.container.State.Health is defined
+    - splunk_container_info.container.State.Health.Status == "healthy"
+  changed_when: false
+
+
+- name: Check Splunk Cluster Manager status
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    user: splunk
+    command: /opt/splunk/bin/splunk status
+  register: splunk_status
+  retries: 30
+  delay: 10
+  until:
+    - splunk_status.stdout is defined
+    - "'splunkd is running' in splunk_status.stdout"
+  changed_when: false
+
+
+- name: Show Splunk Cluster Manager status
+  ansible.builtin.debug:
+    var: splunk_status.stdout_lines
+
+
+- name: Get Splunk UID
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    command: id -u splunk
+  register: splunk_uid
+  changed_when: false
+
+
+- name: Get Splunk GID
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    command: id -g splunk
+  register: splunk_gid
+  changed_when: false
+
+
+- name: Show Splunk UID and GID
+  ansible.builtin.debug:
+    msg:
+      - "Splunk UID: {{ splunk_uid.stdout }}"
+      - "Splunk GID: {{ splunk_gid.stdout }}"
+
+
 - name: Configure Cluster Manager
-  ansible.builtin.command:
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
+    mode: "0644"
+    mode_parse: modern
     argv:
       - "{{ splunk_home }}/bin/splunk"
       - edit
@@ -23,49 +109,30 @@
   no_log: false
   notify: Restart Splunk
 
-- name: Create custom index app directory
-  ansible.builtin.file:
-    path: "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local"
-    state: directory
-    owner: splunk
-    group: splunk
+
+- name: Create a custom index app directory
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
     mode: "0755"
-  become: true
+    mode_parse: modern
+    argv:
+      - mkdir
+      - -p
+      - "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local"
+  changed_when: false
 
 - name: Create indexes.conf
-  ansible.builtin.copy:
-    dest: "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local/indexes.conf"
-    owner: splunk
-    group: splunk
-    mode: "0644"
+  community.docker.docker_container_copy_into:
+    container: splunk-cluster-manager
+    owner_id: "{{ splunk_uid.stdout | int }}"
+    group_id: "{{ splunk_gid.stdout | int }}"
+    mode: "0755"
+    mode_parse: modern
+    container_path: "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local/indexes.conf"
     content: |
       [infra_linux_custom_index]
       homePath = $SPLUNK_DB/infra_linux_custom_index/db
       coldPath = $SPLUNK_DB/infra_linux_custom_index/colddb
-      thawedPath = $SPLUNK_DB/infra_linux_custom_index/thaweddb
-      maxTotalDataSizeMB = 500000
-      frozenTimePeriodInSecs = 7776000
-  become: true
-  notify: Apply Indexer Cluster Bundle
-
-- name: Run notified handlers now
-  ansible.builtin.meta: flush_handlers
-
-- name: Check Splunk status
-  ansible.builtin.command:
-    argv:
-      - "{{ splunk_home }}/bin/splunk"
-      - status
-  become: true
-  become_user: splunk
-  register: splunk_status
-  retries: 30
-  delay: 10
-  until:
-    - splunk_status.rc == 0
-    - "'splunkd is running' in splunk_status.stdout"
-  changed_when: false
-
-- name: Display Splunk status
-  ansible.builtin.debug:
-    var: splunk_status.stdout_lines
+    notify: Apply Indexer Cluster Bundle

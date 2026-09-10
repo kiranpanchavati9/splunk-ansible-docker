@@ -3,3 +3,19 @@
   become: yes
   roles:
     - role: cluster-manager
+
+
+---
+- name: Install Docker on Cluster Manager
+  hosts: cluster_manager
+  become: true
+
+  roles:
+    - common
+
+- name: Deploy Splunk Cluster Manager
+  hosts: cluster_manager
+  become: true
+
+  roles:
+    - cluster-manager
