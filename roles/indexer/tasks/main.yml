@@ -1,3 +1,4 @@
+---
 - name: Create a volume for Indexer data
   community.docker.docker_volume:
     name: splunk_indexer_data
@@ -6,6 +7,7 @@
 - name: Create Splunk Indexer container
   community.docker.docker_container:
     name: splunk-indexer
+    hostname: "{{ inventory_hostname }}"
     image: splunk/splunk:latest
     state: started
     restart_policy: unless-stopped
@@ -14,6 +16,7 @@
     published_ports:
       - "8000:8000"
       - "8089:8089"
+      - "9887:9887"
       - "9997:9997"
 
     volumes:
@@ -100,25 +103,29 @@
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
   register: cluster_peer_config
-  no_log: false
-  notify: Restart Splunk
+  no_log: true
+  notify: Restart Splunk Indexer
 
 
-- name: Show cluster peer configuration result
-  ansible.builtin.debug:
-    var: cluster_peer_config
+- name: Flush Indexer restart handler
+  ansible.builtin.meta: flush_handlers
 
 
-- name: Restart Splunk
-  community.docker.docker_container_exec:
-    container: splunk-indexer
-    user: splunk
-    argv:
-      - "{{ splunk_home }}/bin/splunk"
-      - restart
+- name: Wait for Splunk container after restart
+  community.docker.docker_container_info:
+    name: splunk-indexer
+  register: splunk_container_after_restart
+  retries: 30
+  delay: 10
+  until:
+    - splunk_container_after_restart.container is defined
+    - splunk_container_after_restart.container.State is defined
+    - splunk_container_after_restart.container.State.Health is defined
+    - splunk_container_after_restart.container.State.Health.Status == "healthy"
+  changed_when: false
 
 
-- name: Wait for Splunk after restart
+- name: Wait for Splunkd after restart
   community.docker.docker_container_exec:
     container: splunk-indexer
     user: splunk

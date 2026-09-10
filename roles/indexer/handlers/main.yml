@@ -1,7 +1,5 @@
-- name: Restart Splunk
-  community.docker.docker_container_exec:
-    container: splunk-indexer
-    user: splunk
-    argv:
-      - "{{ splunk_home }}/bin/splunk"
-      - restart
+- name: Restart Splunk Indexer
+  community.docker.docker_container:
+    name: splunk-indexer
+    state: started
+    restart: true
