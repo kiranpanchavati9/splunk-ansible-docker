@@ -107,6 +107,10 @@
   notify: Restart Splunk
 
 
+- name: Restart Cluster Manager before bundle configuration
+  ansible.builtin.meta: flush_handlers
+
+
 - name: Create custom index app directory
   community.docker.docker_container_exec:
     container: splunk-cluster-manager

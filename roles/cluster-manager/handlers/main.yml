@@ -1,3 +1,11 @@
+---
+- name: Restart Splunk
+  community.docker.docker_container:
+    name: splunk-cluster-manager
+    state: started
+    restart: true
+
+
 - name: Validate Indexer Cluster Bundle
   community.docker.docker_container_exec:
     container: splunk-cluster-manager
@@ -8,7 +16,6 @@
       - cluster-bundle
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  register: cluster_bundle_validation
   changed_when: false
   no_log: true
   listen: Apply Indexer Cluster Bundle
@@ -25,3 +32,4 @@
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
   no_log: true
+  listen: Apply Indexer Cluster Bundle
