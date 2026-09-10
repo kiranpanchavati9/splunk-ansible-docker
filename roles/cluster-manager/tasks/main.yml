@@ -151,9 +151,3 @@
   changed_when: false
   no_log: false
   listen: Apply Indexer Cluster Bundle
-
-
-- name: Show cluster bundle validation
-  ansible.builtin.debug:
-    var: cluster_bundle_validation
-  listen: Apply Indexer Cluster Bundle
