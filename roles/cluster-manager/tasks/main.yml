@@ -153,7 +153,7 @@
   listen: Apply Indexer Cluster Bundle
 
 
-  - name: Show cluster bundle validation
+- name: Show cluster bundle validation
   ansible.builtin.debug:
     var: cluster_bundle_validation
   listen: Apply Indexer Cluster Bundle
