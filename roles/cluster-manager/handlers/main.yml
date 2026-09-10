@@ -16,8 +16,9 @@
       - cluster-bundle
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+  register: cluster_bundle_validation
   changed_when: false
-  no_log: true
+  no_log: false
   listen: Apply Indexer Cluster Bundle
 
 
@@ -29,7 +30,9 @@
       - "{{ splunk_home }}/bin/splunk"
       - apply
       - cluster-bundle
+      - --answer-yes
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  no_log: true
+  register: cluster_bundle_apply
+  no_log: false
   listen: Apply Indexer Cluster Bundle

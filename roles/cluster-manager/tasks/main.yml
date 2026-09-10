@@ -107,8 +107,41 @@
   notify: Restart Splunk
 
 
-- name: Restart Cluster Manager before bundle configuration
+# Run the Restart Splunk handler now instead of waiting until
+# the end of the play.
+- name: Apply Cluster Manager configuration restart
   ansible.builtin.meta: flush_handlers
+
+
+# After container restart, wait until Docker reports Splunk healthy again.
+- name: Wait for Cluster Manager after restart
+  community.docker.docker_container_info:
+    name: splunk-cluster-manager
+  register: splunk_cm_after_restart
+  retries: 30
+  delay: 10
+  until:
+    - splunk_cm_after_restart.container is defined
+    - splunk_cm_after_restart.container.State is defined
+    - splunk_cm_after_restart.container.State.Health is defined
+    - splunk_cm_after_restart.container.State.Health.Status == "healthy"
+  changed_when: false
+
+
+- name: Verify Splunk is running after Cluster Manager restart
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    user: splunk
+    argv:
+      - "{{ splunk_home }}/bin/splunk"
+      - status
+  register: splunk_cm_status_after_restart
+  retries: 30
+  delay: 10
+  until:
+    - splunk_cm_status_after_restart.rc == 0
+    - "'splunkd is running' in splunk_cm_status_after_restart.stdout"
+  changed_when: false
 
 
 - name: Create custom index app directory
@@ -135,19 +168,29 @@
       homePath = $SPLUNK_DB/infra_linux_custom_index/db
       coldPath = $SPLUNK_DB/infra_linux_custom_index/colddb
       thawedPath = $SPLUNK_DB/infra_linux_custom_index/thaweddb
+  notify: Apply Indexer Cluster Bundle
 
 
-- name: Validate Indexer Cluster Bundle
+# Run cluster bundle validation/application now instead of at play end.
+- name: Apply Indexer Cluster Bundle now
+  ansible.builtin.meta: flush_handlers
+
+
+- name: Verify Cluster Manager status
   community.docker.docker_container_exec:
     container: splunk-cluster-manager
     user: splunk
     argv:
       - "{{ splunk_home }}/bin/splunk"
-      - validate
-      - cluster-bundle
+      - show
+      - cluster-status
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  register: cluster_bundle_validation
+  register: cluster_status
   changed_when: false
   no_log: false
-  listen: Apply Indexer Cluster Bundle
+
+
+- name: Show Cluster Manager status
+  ansible.builtin.debug:
+    var: cluster_status.stdout_lines
