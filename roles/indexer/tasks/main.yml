@@ -97,14 +97,16 @@
       - "9887"
       - -secret
       - "{{ cluster_secret }}"
-      - -cluster_label
-      - "{{ cluster_label }}"
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  become: true
-  become_user: splunk
-  no_log: true
+  register: cluster_peer_config
+  no_log: false
   notify: Restart Splunk
+
+
+- name: Show cluster peer configuration result
+  ansible.builtin.debug:
+    var: cluster_peer_config
 
 
 - name: Restart Splunk
@@ -114,10 +116,21 @@
     argv:
       - "{{ splunk_home }}/bin/splunk"
       - restart
-  become: true
-  become_user: splunk
-  no_log: true
-  notify: Restart Splunk
+
+
+- name: Wait for Splunk after restart
+  community.docker.docker_container_exec:
+    container: splunk-indexer
+    user: splunk
+    command: "{{ splunk_home }}/bin/splunk status"
+  register: splunk_restart_status
+  retries: 30
+  delay: 10
+  until:
+    - splunk_restart_status.stdout is defined
+    - "'splunkd is running' in splunk_restart_status.stdout"
+  changed_when: false
+
 
 - name: Verify Cluster Peer Status
   community.docker.docker_container_exec:
@@ -129,8 +142,11 @@
       - cluster-status
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  become: true
-  become_user: splunk
-  no_log: true
   register: cluster_status
   changed_when: false
+  no_log: false
+
+
+- name: Show Cluster Status
+  ansible.builtin.debug:
+    var: cluster_status.stdout_lines
