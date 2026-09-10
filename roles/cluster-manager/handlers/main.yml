@@ -1,0 +1,21 @@
+---
+- name: Restart Splunk
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    user: splunk
+    argv:
+      - /opt/splunk/bin/splunk
+      - restart
+
+- name: Apply Indexer Cluster Bundle
+  community.docker.docker_container_exec:
+    container: splunk-cluster-manager
+    user: splunk
+    argv:
+      - /opt/splunk/bin/splunk
+      - apply
+      - cluster-bundle
+      - --answer-yes
+      - -auth
+      - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
+  no_log: true

@@ -3,6 +3,7 @@
   community.docker.docker_volume:
     name: splunk_cm_data
 
+
 - name: Create Splunk Cluster Manager container
   community.docker.docker_container:
     name: splunk-cluster-manager
@@ -84,10 +85,7 @@
 - name: Configure Cluster Manager
   community.docker.docker_container_exec:
     container: splunk-cluster-manager
-    owner_id: "{{ splunk_uid.stdout | int }}"
-    group_id: "{{ splunk_gid.stdout | int }}"
-    mode: "0644"
-    mode_parse: modern
+    user: splunk
     argv:
       - "{{ splunk_home }}/bin/splunk"
       - edit
@@ -104,35 +102,32 @@
       - "{{ cluster_label }}"
       - -auth
       - "{{ splunk_admin_user }}:{{ splunk_admin_password }}"
-  become: true
-  become_user: splunk
-  no_log: false
+  register: cluster_manager_config
+  no_log: true
   notify: Restart Splunk
 
 
-- name: Create a custom index app directory
+- name: Create custom index app directory
   community.docker.docker_container_exec:
     container: splunk-cluster-manager
-    owner_id: "{{ splunk_uid.stdout | int }}"
-    group_id: "{{ splunk_gid.stdout | int }}"
-    mode: "0755"
-    mode_parse: modern
+    user: splunk
     argv:
       - mkdir
       - -p
       - "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local"
   changed_when: false
 
+
 - name: Create indexes.conf
   community.docker.docker_container_copy_into:
     container: splunk-cluster-manager
     owner_id: "{{ splunk_uid.stdout | int }}"
     group_id: "{{ splunk_gid.stdout | int }}"
-    mode: "0755"
+    mode: "0644"
     mode_parse: modern
     container_path: "{{ splunk_home }}/etc/manager-apps/ta_index_custom_app/local/indexes.conf"
     content: |
       [infra_linux_custom_index]
       homePath = $SPLUNK_DB/infra_linux_custom_index/db
       coldPath = $SPLUNK_DB/infra_linux_custom_index/colddb
-    notify: Apply Indexer Cluster Bundle
+  notify: Apply Indexer Cluster Bundle
