@@ -1,7 +1,13 @@
----
-- name: Indexer Cluster Playbook
+- name: Install Docker on Indexer Cluster
   hosts: indexers
-  become: yes
+  become: true
 
   roles:
-    - indexer
+    - common
+
+- name: Deploy Splunk Indexer Cluster
+  hosts: indexers
+  become: true
+
+  roles:
+    - indexer 
