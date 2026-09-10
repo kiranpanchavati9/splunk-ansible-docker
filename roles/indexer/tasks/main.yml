@@ -1,3 +1,86 @@
+- name: Create a volume for Indexer data
+  community.docker.docker_volume:
+    name: splunk_indexer_data
+
+
+- name: Create Splunk Indexer container
+  community.docker.docker_container:
+    name: splunk-indexer
+    image: splunk/splunk:latest
+    state: started
+    restart_policy: unless-stopped
+    pull: true
+
+    published_ports:
+      - "8000:8000"
+      - "8089:8089"
+      - "9997:9997"
+
+    volumes:
+      - "splunk_indexer_data:/opt/splunk"
+
+    env:
+      SPLUNK_GENERAL_TERMS: "--accept-sgt-current-at-splunk-com"
+      SPLUNK_START_ARGS: "--accept-license"
+      SPLUNK_PASSWORD: "{{ splunk_admin_password }}"
+
+
+- name: Wait for Splunk container to become healthy
+  community.docker.docker_container_info:
+    name: splunk-indexer
+  register: splunk_container_info
+  retries: 30
+  delay: 10
+  until:
+    - splunk_container_info.container is defined
+    - splunk_container_info.container.State is defined
+    - splunk_container_info.container.State.Health is defined
+    - splunk_container_info.container.State.Health.Status == "healthy"
+  changed_when: false
+
+
+- name: Check Splunk Indexer status
+  community.docker.docker_container_exec:
+    container: splunk-indexer
+    user: splunk
+    command: /opt/splunk/bin/splunk status
+  register: splunk_status
+  retries: 30
+  delay: 10
+  until:
+    - splunk_status.stdout is defined
+    - "'splunkd is running' in splunk_status.stdout"
+  changed_when: false
+
+
+- name: Show Splunk Indexer status
+  ansible.builtin.debug:
+    var: splunk_status.stdout_lines
+
+
+- name: Get Splunk UID
+  community.docker.docker_container_exec:
+    container: splunk-indexer
+    command: id -u splunk
+  register: splunk_uid
+  changed_when: false
+
+
+- name: Get Splunk GID
+  community.docker.docker_container_exec:
+    container: splunk-indexer
+    command: id -g splunk
+  register: splunk_gid
+  changed_when: false
+
+
+- name: Show Splunk UID and GID
+  ansible.builtin.debug:
+    msg:
+      - "Splunk UID: {{ splunk_uid.stdout }}"
+      - "Splunk GID: {{ splunk_gid.stdout }}"
+
+
 - name: Configure Indexer as Cluster Peer
   community.docker.docker_container_exec:
     container: splunk-indexer
