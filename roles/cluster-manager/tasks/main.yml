@@ -130,4 +130,5 @@
       [infra_linux_custom_index]
       homePath = $SPLUNK_DB/infra_linux_custom_index/db
       coldPath = $SPLUNK_DB/infra_linux_custom_index/colddb
+      thawedPath = $SPLUNK_DB/infra_linux_custom_index/thaweddb
   notify: Apply Indexer Cluster Bundle
